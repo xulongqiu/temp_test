@@ -15,10 +15,10 @@ class LBRPyExcel:
     def __init__(self, path):
         self.SUPPORT_AVERAGE_TO_XLS = False
         self.SUPPORT_PLOT_ALL_CYCLES = False
-        self.SUPPORT_WIFI = True
-        self.SUPPORT_BT = True
-        self.SUPPORT_TEMP = False
-        self.SUPPORT_TEMP_UPDOWN_MATCHED_CURVE = False
+        self.SUPPORT_WIFI = False
+        self.SUPPORT_BT = False
+        self.SUPPORT_TEMP = True
+        self.SUPPORT_TEMP_UPDOWN_MATCHED_CURVE = True
         # 保存路径信息
         self.path = path
         # 创建工作簿
@@ -104,7 +104,7 @@ class LBRPyExcel:
             
         if self.SUPPORT_TEMP == True:    
             #{'kj500000': '110', 'mem_fail': 0, 'normal': 45, 'BID': 'b2', 'dynamic': 102, 'kj600000': '110', 'high': 115, 'mem_total': 42, 'kj400000': '99'}
-            head = ['板号', '常温结温', '高温结温', '变频结温', '拷机480M结温', '拷机600M结温', '拷机768M结温', 'MTEST:TOTAL', 'MTEST:FAIL']
+            head = ['板号', '常温结温', '高温结温', '变频结温', '拷机384M结温', '拷机480M结温', '拷机600M结温', 'MTEST:TOTAL', 'MTEST:FAIL']
             self.add_sheet_head(sheet, head)
             av_normal = 0
             av_hight = 0
@@ -132,15 +132,15 @@ class LBRPyExcel:
                 content.append(tmp)
                 av_dynamic += tmp
                 
-                tmp = values.get('kj480000')
+                tmp = values.get('kj384000')
                 content.append(tmp)
                 av_kj384 += tmp
                 
-                tmp = values.get('kj600000')
+                tmp = values.get('kj480000')
                 content.append(tmp)
                 av_kj480 += tmp
                 
-                tmp = values.get('kj768000')
+                tmp = values.get('kj600000')
                 content.append(tmp)
                 av_kj600 += tmp
                 
@@ -243,8 +243,8 @@ class LBRPyExcel:
             for i in range(len(content)):
                 sheet.write(now_row, i, content[i], self.content_style)
                 width = sheet.col(i).width
-                if width < 350 * (len(str(content[i])) + 1):
-                    sheet.col(i).width = 350 * (len(str(content[i])) + 1)
+                if width < 200 * (len(str(content[i])) + 1):
+                    sheet.col(i).width = 200 * (len(str(content[i])) + 1)
             pass
         else:
             pass
@@ -472,10 +472,10 @@ class LBRPyExcel:
             if line.find('the process is') == 0:
                 break
 
-            if line.find('kj384000|') == 0 or line.find('kj480000|') == 0 or line.find('kj600000|') == 0 \
-            or line.find('kj768000|') == 0 or line.find('kj500000|') == 0:
+            if line.find('kj384000') == 0 or line.find('kj480000|') == 0 or line.find('kj600000|') == 0 \
+            or line.find('kj400000') == 0 or line.find('kj500000|') == 0:
                 datas = line.split('|')
-                if len(datas) > 8 and len(datas) < 6:
+                if len(datas) != 7 and len(datas) != 6:
                     continue      
                 
                 #temperature
@@ -640,7 +640,7 @@ class LBRPyExcel:
                                                     
             if line.find('normal|') == 0 or line.find('high|') == 0 or line.find('dynamic|') == 0:
                 datas = line.split('|')
-                if len(datas) > 8 or len(datas) < 6:
+                if len(datas) != 7 and len(datas) != 6:
                     continue      
                 case_key = datas[0]
                 case_freq = datas[4].split(':')[1]
