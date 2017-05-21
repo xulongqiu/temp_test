@@ -7,23 +7,15 @@ import xlrd
 import xlwt
 import linecache
 import string
-import pylab as pl
-import matplotlib
-import numpy as np
+import SheetBaseClass
+
 
 class LBRPyExcel:
     def __init__(self, path):
-        self.SUPPORT_AVERAGE_TO_XLS = False
-        self.SUPPORT_PLOT_ALL_CYCLES = False
-        self.SUPPORT_WIFI = True
-        self.SUPPORT_BT = True
-        self.SUPPORT_TEMP = False
-        self.SUPPORT_TEMP_UPDOWN_MATCHED_CURVE = False
         # 保存路径信息
         self.path = path
         # 创建工作簿
-        self.workbooks = {}
-        #= xlwt.Workbook(encoding='utf-8')
+        self.workbook = xlwt.Workbook(encoding='utf-8')
         # 创建工作表
         self.sheets = []
         # 创建表头样式
@@ -58,696 +50,143 @@ class LBRPyExcel:
         self.pro_style = xlwt.easyxf('pattern: pattern solid, fore_colour yellow; font: colour black, bold on;');
         self.pro_style.font.name = 'WenQuanYi Zen Hei'
         # 设置错误项左对齐
-        self.pro_style.alignment.horz = xlwt.Alignment.HORZ_CENTER  
-        
-        # 设置错误项背景颜色为红色, 字体加粗
-        self.merge_style = xlwt.easyxf('pattern: pattern solid, fore_colour blue; font: colour black, bold on;');
-        self.merge_style.font.name = 'WenQuanYi Zen Hei'
-        # 设置错误项左对齐
-        self.merge_style.alignment.horz = xlwt.Alignment.HORZ_CENTER           
-        
-        #self.xmlhead = ['case', 'freq', 'cycle-1', 'cycle-2', 'cycle-3']
-        self.wb_name = os.path.basename(sys.argv[2]).split('.')[0]
-        self.sheets_name = []
-        self.mem_test_sheet_name = []
-        self.summery = {}
-        self.summery_sboard = {}
-        self.summery_average_col_index = 0
-        self.matched_curve_boards_up = {}
-        self.matched_curve_boards_down = {}
+        self.pro_style.alignment.horz = xlwt.Alignment.HORZ_CENTER        
         pass
     
     def process(self):
         # 如果路径是文件夹, 分别遍历所有文件, 一一进行处理
-        if self.SUPPORT_TEMP == True:
-            sheet = self.create_sheet(self.wb_name + '-summery', 'summery')
-            #AVERAGE
-            if self.SUPPORT_AVERAGE_TO_XLS == True:
-                self.create_sheet(self.wb_name + '-summery', 'temp_average')
-                
         if(os.path.isdir(self.path)):
             for root, dirs, files in os.walk(self.path):
                 for name in files:
                     f_name = os.path.join(root, name)
-                    #print f_name
                     if(os.path.isdir(f_name)):
                         for _root, _dirs, _files in os.walk(f_name):
                             for _name in _files:
                                 _f_name = s.path.join(_root, _name)
-                                #print _f_name
                                 self.process_single_file(_f_name)
                     else:
                         self.process_single_file(f_name)
         else:
             f_name = self.path
             self.process_single_file(f_name)
-            
-        if self.SUPPORT_TEMP == True:    
-            #{'kj500000': '110', 'mem_fail': 0, 'normal': 45, 'BID': 'b2', 'dynamic': 102, 'kj600000': '110', 'high': 115, 'mem_total': 42, 'kj400000': '99'}
-            head = ['板号', '常温结温', '高温结温', '变频结温', '拷机480M结温', '拷机600M结温', '拷机768M结温', 'MTEST:TOTAL', 'MTEST:FAIL']
-            self.add_sheet_head(sheet, head)
-            av_normal = 0
-            av_hight = 0
-            av_dynamic = 0
-            av_kj384 = 0
-            av_kj480 = 0
-            av_kj600 = 0
-            av_memtotal = 0
-            av_memfail = 0
-            
-            #print self.summery_sboard.keys()
-            for key in self.summery:
-                values = self.summery[key]
-                content = []
-                content.append(values.get('BID'))
-                tmp = values.get('normal')
-                content.append(tmp)
-                av_normal += tmp;
-                
-                tmp = values.get('high')
-                content.append(tmp)
-                av_hight += tmp
-                
-                tmp = values.get('dynamic')
-                content.append(tmp)
-                av_dynamic += tmp
-                
-                tmp = values.get('kj480000')
-                content.append(tmp)
-                av_kj384 += tmp
-                
-                tmp = values.get('kj600000')
-                content.append(tmp)
-                av_kj480 += tmp
-                
-                tmp = values.get('kj768000')
-                content.append(tmp)
-                av_kj600 += tmp
-                
-                tmp = values.get('mem_total')
-                content.append(tmp)
-                av_memtotal += tmp
-                
-                tmp = values.get('mem_fail')
-                content.append(tmp)
-                av_memfail += tmp
-                
-                self.add_sheet_row(sheet, content)
-                #print self.summery[key]
-            cnt = len(self.summery)
-            self.add_sheet_row(sheet, ['average', av_normal//cnt, av_hight//cnt, av_dynamic//cnt, 
-                                       av_kj384//cnt, av_kj480//cnt, av_kj600//cnt, av_memtotal//cnt, av_memfail//cnt])
-        #b---blue   c---cyan  g---green    k----black
-        #m---magenta r---red  w---white    y----yellow 
-        
-        color = ['b', 'g', 'y', 'r', 'c']
-        if self.SUPPORT_TEMP_UPDOWN_MATCHED_CURVE == True:
-            matched_curves = {}
-            i = 0
-            for board_key in self.matched_curve_boards_up:
-                board_curves = self.matched_curve_boards_up[board_key]
-                for case_key in board_curves:
-                    matched_curves[board_key + '_' + case_key + '_' + color[i%5]] = board_curves[case_key]
-                i += 1
-                if i % 5 == 0:
-                    self.plot_one_boards(matched_curves, self.wb_name + '-matched_curves_up_' + str(i))
-                    matched_curves = {}
-            i = 0
-            for board_key in self.matched_curve_boards_down:
-                board_curves = self.matched_curve_boards_down[board_key]
-                for case_key in board_curves:
-                    matched_curves[board_key + '_' + case_key + '_' + color[i%5]] = board_curves[case_key]
-                i += 1
-                if i % 5 == 0:
-                    self.plot_one_boards(matched_curves, self.wb_name + '-matched_curves_down_' + str(i))
-                    matched_curves = {}            
+        # 保存工作簿数据到文件
+        self.workbook.save(sys.argv[2])
 
-    def get_sheet(self, wb_name, sheet_name):
-        #print wb_name, sheet_name
-        work_book = self.workbooks.get(wb_name)
-        if work_book:
-            try:
-                sheet = work_book.get_sheet(sheet_name)
-            except:
-                return
-            
-            if sheet:
-                return sheet
-            else:
-                return 
-        else:
-            return     
-        pass
-    
-    def create_sheet(self, wb_name, sheet_name):
-        work_book = self.workbooks.get(wb_name)
-        
-        if work_book:
-            sheet = work_book.add_sheet(sheet_name, cell_overwrite_ok=True)
-            return sheet
-        else:
-            work_book = xlwt.Workbook(encoding='utf-8')
-            sheet = work_book.add_sheet(sheet_name, cell_overwrite_ok=True)
-            self.workbooks[wb_name] = work_book
-            return sheet
-        pass
-    
-    def save_workbooks(self):
-        for key in self.workbooks:
-            self.workbooks[key].save(key + '.xls')
-        pass
-    
-    def add_sheet_head(self, sheet, head):
-        if sheet:
-            sheet.write_merge(0, 0, 0, len(head) - 1, u'提示: 此表格由日志分析程序自动生成', self.pro_style)
-            now_row = len(sheet.rows)
-            for i in range(len(head)):
-                sheet.write(now_row, i, head[i], self.head_style)
-                sheet.col(i).width = 200 * (len(head[i]) + 1)
-            pass
-        else:
-            pass
-        pass
-    
-    def sheet_merge(self, sheet, row_start, row_cnt, col_start, col_cnt, str_content):
-        if sheet:
-            sheet.write_merge(row_start, row_start + row_cnt, col_start, col_start + col_cnt, str_content, self.pro_style)
-            pass
-        else:
-            pass
-    
-    def add_sheet_row(self, sheet, content):
-        if sheet:
-            now_row = len(sheet.rows)
-             
-            for i in range(len(content)):
-                sheet.write(now_row, i, content[i], self.content_style)
-                width = sheet.col(i).width
-                if width < 350 * (len(str(content[i])) + 1):
-                    sheet.col(i).width = 350 * (len(str(content[i])) + 1)
-            pass
-        else:
-            pass
-        pass   
-    
-    def add_sheet_col(self, sheet, content, col_index, row_start):
-        if sheet:
-            width = sheet.col(col_index).width
-            for i in range(len(content)):
-                sheet.write(row_start + i, col_index, content[i], self.content_style)
-                if width < 300 * (len(str(content[i])) + 1):
-                    sheet.col(col_index).width = 300 * (len(str(content[i])) + 1)
-            pass
-        else:
-            pass
-        pass     
-    
     def process_single_file(self, f_name):
         if not os.path.isfile(f_name):
             print '路径不是文件'
-            sys.exit(-1)
-        
-        if f_name.find('.log') < 0:
+        if f_name.find('xls') > 0:
             return
+        if f_name.find('png') > 0:
+            return
+        if f_name.find('zip') > 0:
+            return              
         print 'f_name: ', f_name
-        
-        if self.SUPPORT_TEMP == True:
-            board_id = os.path.basename(f_name).split('.')[0].split('_')[3]
-            self.summery_sboard = {}
-            self.summery_sboard['BID'] = board_id            
-            wb_name = self.wb_name + '-temperatue'
-            self.file_filter_temp_test(f_name, wb_name)
-            wb_name = self.wb_name + '-kaoji'
-            self.file_filter_kaoji_test(f_name, wb_name) 
-            wb_name = self.wb_name + '-memtest'
-            self.file_filter_mem_test(f_name, wb_name)
-            self.summery[os.path.basename(f_name).split('.')[0]] = self.summery_sboard
-            
-        if self.SUPPORT_WIFI == True:
-            wb_name = self.wb_name + '-wifi'
-            self.file_filter_wifi_test(f_name, wb_name) 
-        if self.SUPPORT_BT == True:
-            wb_name = self.wb_name + '-bt'
-            self.file_filter_bt_test(f_name, wb_name)  
-
-        pass
-
-    def file_filter_wifi_test(self, f_name, wb_name):
-        sheet_name = os.path.basename(f_name).split('.')[0]
+        sheet_temp = SheetBaseClass.SheetBaseClass(self.workbook, os.path.basename(f_name)) #self.workbook.add_sheet(os.path.basename(f_name), cell_overwrite_ok=True)
         # 打开文件
         file_obj = open(f_name)
-        cases_wifi = {}  
-        bandwidth = ''
+ 
+        # 依次写入表头
+        head = [u'case', u'freq(Hz)', u'coreCnt', u'time(secs)', u'cpuTemp(°C)', u'ModuleTemp(°C)', u'cycles', u'Note']
         
-        for line in file_obj:
-            
-            if line.find('Start wifi test:') == 0:
-                bandwidth = line.split(' ')[3]
-                pass
-            
-            if len(bandwidth) <= 0:
-                continue
-            
-            #[  3] 550.0-552.0 sec  4.71 MBytes  19.8 Mbits/sec
-            if line.find('Mbits/sec') > 0:
-                datas = line.split(' ')
-                
-                if len(datas) < 10 or len(datas) > 12:
-                    continue      
-                #print datas
-                #bandwidth
-                #print datas[len(datas) - 2]
-                bw = float(datas[len(datas) - 2])
-                cycle_value = cases_wifi.get(bandwidth)
-                if cycle_value:
-                    cycle_value.append(bw)
-                else:
-                    cycle_value = []
-                    cycle_value.append(bw)
-                    cases_wifi[bandwidth] = cycle_value
-                pass                
-                pass
-            pass
-        
-        sheet = self.create_sheet(wb_name, sheet_name)
-        head = ['case']
-        max_len = 0
-        
-        for key in cases_wifi:
-            head.append(key)
-            tmp_len = len(cases_wifi[key])
-            self.summery_sboard[key] = max(cases_wifi[key])
-            if tmp_len > max_len:
-                max_len = tmp_len
-            pass
-        
-        self.add_sheet_head(sheet, head)
-        
-        for i in range(max_len):
-            content = ['wifi']
-            for key in cases_wifi:
-                if len(cases_wifi[key]) > i:
-                    value = cases_wifi[key][i]
-                    content.append(value)
-                pass
-            
-            if len(content) > len(cases_wifi):
-                self.add_sheet_row(sheet, content)
-            pass        
-        
-        self.plot_one_boards(cases_wifi, sheet_name + '-wifi') 
-
-    def file_filter_bt_test(self, f_name, wb_name):
-        sheet_name = os.path.basename(f_name).split('.')[0]
-        # 打开文件
-        file_obj = open(f_name)
-        cases_wifi = {}  
-        bandwidth = 'data_rev'
-        
-        for line in file_obj:
-            
-            # Bt_test.... |time|Rate|ch|Len|....  BtTestValue is|505|44100|2|3482112|
-            if line.find('BtTestValue') > 0:
-                datas = line.split('|')
-                #print datas
-
-                if len(datas) != 11:
-                    continue      
-                #print datas
-                #bandwidth
-                #print datas[len(datas) - 2]
-
-                bw = int(datas[len(datas) - 2])
-                cycle_value = cases_wifi.get(bandwidth)
-                if cycle_value:
-                    cycle_value.append(bw)
-                else:
-                    cycle_value = []
-                    cycle_value.append(bw)
-                    cases_wifi[bandwidth] = cycle_value
-                pass                
-                pass
-            pass
-        
-        sheet = self.create_sheet(wb_name, sheet_name)
-        head = ['case']
-        max_len = 0
-        
-        for key in cases_wifi:
-            head.append(key)
-            tmp_len = len(cases_wifi[key])
-            self.summery_sboard[key] = max(cases_wifi[key])
-            if tmp_len > max_len:
-                max_len = tmp_len
-            pass
-        
-        self.add_sheet_head(sheet, head)
-        
-        for i in range(max_len):
-            content = ['bluetooth']
-            for key in cases_wifi:
-                if len(cases_wifi[key]) > i:
-                    value = cases_wifi[key][i]
-                    content.append(value)
-                pass
-            
-            if len(content) > len(cases_wifi):
-                self.add_sheet_row(sheet, content)
-            pass        
-        
-        self.plot_one_boards(cases_wifi, sheet_name + '-bt') 
-
-        
-    def file_filter_mem_test(self, f_name, wb_name):
-        board_id = os.path.basename(f_name).split('.')[0]
-        # 打开文件
-        file_obj = open(f_name)  
-        
-        mem_test_cnt = 0
-        mem_test_pass_cnt = 0     
-        mem_test_fail_cnt = 0
-        
-        for line in file_obj:
-            if line.find('[ ID] Interval') == 0 or line.find('Bt_test....') == 0:
-                break
-            if line.find('the process is') == 0:
-                mem_test_cnt += 1
-                continue
-            if line.find('xxxx FAIL xxxx') == 0:
-                mem_test_fail_cnt += 1
-                continue
-                
-            if line.find('**** PASS ****') >= 0:
-                mem_test_pass_cnt += 1
-                continue    
-            pass
-        
-        if 'mem_test' in self.mem_test_sheet_name:
-            sheet = self.get_sheet(wb_name, 'mem_test')
-        else:
-            sheet = self.create_sheet(wb_name, 'mem_test')
-            self.add_sheet_head(sheet, ['BID', 'total', 'succ', 'fail', 'undone'])
-            self.mem_test_sheet_name.append('mem_test')
-        
-        content = []
-        content.append(board_id.split('_')[3])
-        content.append(mem_test_cnt)
-        content.append(mem_test_pass_cnt)
-        content.append(mem_test_fail_cnt)
-        content.append(mem_test_cnt - mem_test_pass_cnt - mem_test_fail_cnt)
-        self.add_sheet_row(sheet, content)
-        
-        self.summery_sboard['mem_total'] = mem_test_cnt
-        self.summery_sboard['mem_fail'] = mem_test_fail_cnt
-        
-        pass
-    
-    def file_filter_kaoji_test(self, f_name, wb_name):
-        sheet_name = os.path.basename(f_name).split('.')[0]
-        # 打开文件
-        file_obj = open(f_name)
-        cases_kaoji = {}      
-        
-        for line in file_obj:
-            if line.find('the process is') == 0:
-                break
-
-            if line.find('kj384000|') == 0 or line.find('kj480000|') == 0 or line.find('kj600000|') == 0 \
-            or line.find('kj768000|') == 0 or line.find('kj500000|') == 0:
-                datas = line.split('|')
-                if len(datas) > 8 and len(datas) < 6:
-                    continue      
-                
-                #temperature
-                temp = int(datas[1].split(':')[1])
-                cycle_value = cases_kaoji.get(datas[0])
-                if cycle_value:
-                    cycle_value.append(temp)
-                else:
-                    cycle_value = []
-                    cycle_value.append(temp)
-                    cases_kaoji[datas[0]] = cycle_value
-                pass                
-                pass
-            pass
-        
-        sheet = self.create_sheet(wb_name, sheet_name)
-        head = ['case']
-        max_len = 0
-        
-        for key in cases_kaoji:
-            head.append(key)
-            tmp_len = len(cases_kaoji[key])
-            self.summery_sboard[key] = max(cases_kaoji[key])
-            if tmp_len > max_len:
-                max_len = tmp_len
-            pass
-        
-        self.add_sheet_head(sheet, head)
-        
-        for i in range(max_len):
-            content = ['kaoji']
-            for key in cases_kaoji:
-                if len(cases_kaoji[key]) > i:
-                    value = cases_kaoji[key][i]
-                    content.append(value)
-                pass
-            
-            if len(content) > len(cases_kaoji):
-                self.add_sheet_row(sheet, content)
-            pass       
-        #if len(cases_kaoji) > 0:
-            #self.plot_one_boards(cases_kaoji, wb_name) 
-       
-    def file_filter_temp_test(self, f_name, wb_name):
-        sheet_name = os.path.basename(f_name).split('.')[0]
-        board_id = sheet_name.split('_')[3]
-        # 打开文件
-        file_obj = open(f_name)
-        
+        # 由于每一行都会对cycle赋值， 因此某次循环检测到的cycles start会被normal的行覆盖掉， 因此， cycle永远为0
         cycle = 0
-        case_cycles ={}
-        case_key = ''
-        case_freq = 0
-        case_average = {}
-        matched_curve_board_up = {}
-        matched_curve_board_down = {}
-
-        for line in file_obj:
-            #Test 1 cycles start
-            # 判定一个cycle的开始
-            if line.find('Start 4x') == 0:
+        ubootTemp = 0
+        while 1:
+            updown = ''
+            line = file_obj.readline()
+            if not line:
                 break
-            if line.find('cycles start') > 0:
+        
+            if line.find('kj600000|') == 0:
+                break
+            #ubootTemp|temp:27|time:0
+            if line.find('ubootTemp|') == 0: 
+                if ubootTemp == 0:
+                    cycle = cycle + 1;
+                    if cycle == 3:
+                        cycle = 1
+                ubootTemp = int(line.split('|')[1].split(':')[1])
+                #print 'cycle=', cycle, line
+            
+            # 提取常温下cycle的曲线
+            if line.find('envTemp:') == 0:
+                #envTemp:15|temp:28|adc:|1.1.1.1|freq:1536000|time:9.518|mtemp:16|points:1|up
+                #==> {"envTemp:15", "temp:28", "adc:", "1.1.1.1", "freq:153600", "time:9.518", "mtemp:91", "points:70", "up"}
+                
+                datas = line.split('|')
+                if len(datas) <= 8:
+                    line = line + file_obj.readline()
+                    datas = line.split('|')
+                    
+                if ubootTemp != 0:
+                    sheet_temp.addSheetHead(head)
+                    content = [datas[0].split(':')[1], None, None, 0, ubootTemp, None, None, 'uboot']
+                    sheet_temp.addSheetRow(content);
+                    ubootTemp = 0
                 try:
-                    cycle = int(line.split(' ')[1])
+                    # 提取频率数据
+                    content= []
+                    coreCnt = 0;
+                    cores = datas[3].split('.');
+                    for i in range(len(cores)):
+                        if cores[i] == '1':
+                            coreCnt += 1;
+                    #print "CORE_CNT:", coreCnt
+                    freq_tmp = int(datas[4].split(':')[1])
+                    #print "freq_tmp:", freq_tmp
+                    # 提取时间戳数据
+                    time_tmp = float(datas[5].split(':')[1])
+                    #print "time_tmp:", time_tmp
+                    temp_tmp = int(datas[1].split(':')[1])
+                    #print "temp_tmp:", temp_tmp
+                    temp_tmp1 = int(datas[6].split(':')[1])
+                    #print "temp_tmp1:", temp_tmp1
+                    
+                    if datas[8].find('d') >= 0:
+                        updown = 'down'
+                    elif datas[8].find('u') >= 0:    
+                        updown = 'up'
+                    
+                    #case 
+                    content.append(datas[0].split(':')[1])
+                    #freq
+                    if freq_tmp > 0:
+                        content.append(freq_tmp)
+                    else:
+                        content.append(None)
+                    #coreCnt
+                    content.append(coreCnt)
+                    #time 
+                    if time_tmp > 0:
+                        content.append(time_tmp)
+                    else:
+                        content.append(None)                    
+                    
+                    # 提取结温数据
+                    if temp_tmp < 200:
+                        content.append(temp_tmp)
+                    else:
+                        content.append(None)
+                        
+                    # 提取模块温度
+                    if temp_tmp1 < 125:
+                        content.append(temp_tmp1);
+                    else:
+                        content.append(None)
+                    if cycle >= 0:
+                        content.append(cycle);
+                    else:
+                        content.append(None)
+                        
+                    content.append(updown);
+                    
+                    if len(content) > 0:
+                        sheet_temp.addSheetRow(content)
+                    #print "freq: %d, core: %d, time: %d, cpuTemp: %d, moduleTemp:%d" % (freq_tmp, coreCnt, time_tmp, temp_tmp, temp_tmp1)
                 except:
                     pass
-                continue
-            
-            if cycle <= 0:
-                continue
-            
-            #normal cycles or hight cycles or dynamic cycles
-            if line.find('cycles complete') >= 0 and len(case_cycles) > 0:
-                #case_cycles = sorted(case_cycles.items(), key=lambda d:d[0])
-                if self.SUPPORT_PLOT_ALL_CYCLES == True:
-                    self.plot_one_boards(case_cycles, sheet_name + case_key)
-                average_curve = []
-                if sheet_name in self.sheets_name:
-                    sheet = self.get_sheet(wb_name, sheet_name)
-                    pass
-                else:
-                    sheet = self.create_sheet(wb_name, sheet_name)
-                    head = ['case', 'freq']
-                    for key in case_cycles:
-                        head.append('cycle-' + key)
-                        pass
-                    head.append('average')
-                    self.add_sheet_head(sheet, head)
-                    self.sheets_name.append(sheet_name)
-                    pass
                 
-                max_len = 0
-                for key in case_cycles:
-                    temp_len = len(case_cycles[key])
-                    if temp_len > max_len:
-                        max_len = temp_len
-                cycles_cnt = len(case_cycles)        
-                for i in range(max_len):
-                    content = [case_key, case_freq]
-                    average = 0;
-                    av_cnt = 0;
-                    
-                    for key in case_cycles:
-                        if len(case_cycles[key]) > i:
-                            value = case_cycles[key][i]
-                            average += int(value)
-                            av_cnt += 1
-                            content.append(value)
-                        else:
-                            content.append('')
-                        pass
-                    if False:#av_cnt != cycles_cnt:
-                        content.append('')
-                    else:
-                        content.append(average//av_cnt)
-                        average_curve.append(average//av_cnt)
-                        
-                    if len(content) == cycles_cnt + 3:
-                        self.add_sheet_row(sheet, content)
-                    pass
-                case_cycles = {}
-                self.summery_sboard[case_key] = max(average_curve)
-                case_average[case_key] = average_curve
-                
-                if self.SUPPORT_TEMP_UPDOWN_MATCHED_CURVE == True and case_key != 'dynamic':
-                    max_temp =  max(average_curve)
-                    boolTop = False
-                    last_point = 0
-                    match_cycle = []
-                    '''
-                    for i in range(99):
-                        match_cycle.append(average_curve[i])
-                    #for i in range(500,len(average_curve) - 1):
-                     #   match_cycle.append(average_curve[i])
-                    matched_curve_board[case_key] = match_cycle
-                    '''
-                    
-                    for i in range(len(average_curve)):
-                        if average_curve[i] < max_temp - 1:
-                            match_cycle_up = matched_curve_board_up.get(case_key)
-                            match_cycle_down = matched_curve_board_down.get(case_key)
-                            if not match_cycle_up:
-                                match_cycle_up = []
-                                matched_curve_board_up[case_key] = match_cycle_up
-                            if not match_cycle_down:
-                                match_cycle_down = []
-                                matched_curve_board_down[case_key] = match_cycle_down 
-                                
-                            if boolTop == False:
-                                if average_curve[i] == max_temp - 2:
-                                    #match_cycle_up.append(max_temp -1)
-                                    #match_cycle_up.append(max_temp)   
-                                    boolTop = True
-                                elif average_curve[i] >= last_point:
-                                    match_cycle_up.append(average_curve[i])  
-                                    last_point = average_curve[i]
-                            else:
-                                if average_curve[i] <= last_point:
-                                    match_cycle_down.append(average_curve[i]) 
-                                    last_point = average_curve[i]
-                                                    
-            if line.find('normal|') == 0 or line.find('high|') == 0 or line.find('dynamic|') == 0:
-                datas = line.split('|')
-                if len(datas) > 8 or len(datas) < 6:
-                    continue      
-                case_key = datas[0]
-                case_freq = datas[4].split(':')[1]
-                #temperature
-                temp = datas[1].split(':')[1]
-                cycle_value = case_cycles.get(str(cycle))
-                if cycle_value:
-                    cycle_value.append(temp)
-                else:
-                    cycle_value = []
-                    cycle_value.append(temp)
-                    case_cycles[str(cycle)] = cycle_value
-                pass
-        if len(case_average) > 0:    
-            self.plot_one_boards(case_average, sheet_name + '-temp')
-            
-        if self.SUPPORT_TEMP_UPDOWN_MATCHED_CURVE == True:
-            if len(matched_curve_board_up) > 0:
-                self.matched_curve_boards_up[board_id] = matched_curve_board_up
-                self.plot_one_boards(matched_curve_board_up, sheet_name + '-matched_curve_up')
-            if len(matched_curve_board_down) > 0:
-                self.matched_curve_boards_down[board_id] = matched_curve_board_down
-                self.plot_one_boards(matched_curve_board_down, sheet_name + '-matched_curve_down')                
-            
-        #AVERAGE
-        if self.SUPPORT_AVERAGE_TO_XLS == True:
-            sheet = self.get_sheet(self.wb_name + '-summery', 'temp_average')
-            self.sheet_merge(sheet, 0, 0, self.summery_average_col_index, 2, board_id)
-            sheet.write(1, self.summery_average_col_index, 'normal', self.head_style)
-            sheet.write(1, self.summery_average_col_index + 1, 'high', self.head_style)
-            sheet.write(1, self.summery_average_col_index + 2, 'dynamic', self.head_style)
-            
-            values = matched_curve_board.get('normal')
-            if values:
-                self.add_sheet_col(sheet, values, self.summery_average_col_index, 2)
-    
-            values = matched_curve_board.get('high')
-            if values:
-                self.add_sheet_col(sheet, values, self.summery_average_col_index + 1, 2)        
-            
-            values = matched_curve_board.get('dynamic')
-            if values:
-                self.add_sheet_col(sheet, values, self.summery_average_col_index + 2, 2)        
-            
-            self.summery_average_col_index += 4 
-
-    def plot_one_boards(self, dict_data, f_name):
-        self.plot_cycles(dict_data, f_name, 'lineChart')
-        pass
-    
-    def plot_matched_curve(self, dict_data, f_name):
-        self.plot_cycles(dict_data, f_name, 'matchedCurve')
-            
-    def plot_cycles(self, dict_data, file_name, typeArray): 
-        disp_font = matplotlib.font_manager.FontProperties(fname='/usr/share/fonts/truetype/ubuntu-font-family/Ubuntu-B.ttf')
-        maxes_val = []
-        maxes_cnt = []
-        min_val = []
-        pl.figure(figsize=(9, 6))
-        #main_fig = pl.subplot(211)
-        if len(dict_data) > 0:
-            #print 'have %d series...' % len(dict_data)
-            new_data = []
-            # 每组数据
-            for key in dict_data:
-                temp_temp_data = dict_data[key]
-                if 'lineChart' in typeArray:
-                    maxes_val.append(max(temp_temp_data))
-                    maxes_cnt.append(len(temp_temp_data))
-                    min_val.append(min(temp_temp_data))
-                    new_data.append(temp_temp_data[len(temp_temp_data) / 2])
-                    datas = key.split('_')
-                    if datas[0].find('b') == 0 and len(datas) == 3:
-                        pl.plot(range(0, len(temp_temp_data), 1), temp_temp_data, datas[2],label=key)
-                    else:
-                        pl.plot(range(0, len(temp_temp_data), 1), temp_temp_data,label=key)
-                        
-                if 'matchedCurve' in typeArray:
-                    p = np.polyfit(range(0, len(temp_temp_data), 1),temp_temp_data, 4)
-                    y_av = np.polyval(p, range(0, len(temp_temp_data), 1))
-                    pl.plot(range(0, len(temp_temp_data), 1), y_av, label=key)  
-                    datas = key.split('_')
-                    if datas[0].find('b') == 0 and len(datas) == 3:
-                        pl.plot(range(0, len(temp_temp_data), 1), temp_temp_data, datas[2],label=key)
-                    else:
-                        pl.plot(range(0, len(temp_temp_data), 1), temp_temp_data,label=key)
-                    
-                pl.legend()
-    
-    
-        pl.title(file_name, fontproperties=disp_font)
-        pl.xlabel(u'samples(time)', fontproperties=disp_font)
-        pl.ylabel(u'temperature(C)', fontproperties=disp_font)
-        if len(maxes_cnt):
-            pl.xlim(0.0, max(maxes_cnt) + 40)
-        if len(maxes_val):
-            pl.ylim(min(min_val) - 20, max(maxes_val) + 10)
-    
-        pl.grid(False)
-        ax = pl.axes()
-        ax.yaxis.grid()
-        #ax.xaxis.grid()
-        #pl.show()  
-        curve_name = file_name + '.png'
-        pl.savefig(curve_name)
-        pl.close()
-        pass    
 if __name__ == '__main__':
     if len(sys.argv) < 3:
         print 'xml filename sys.argc=(%d)' % len(sys.argv)
@@ -756,13 +195,4 @@ if __name__ == '__main__':
     print sys.argv[1]
     print sys.argv[2]
     log = LBRPyExcel(sys.argv[1])
-    #sheet = log.create_sheet(sys.argv[1], sys.argv[2])
-    #log.add_sheet_head(sheet, ['case', 'freq', 'time', 'temp', 'cycles', 'Note'])
-    #log.add_sheet_row(sheet, ['normal', '384000', '25', '125', '15'])
-    #log.sheet_merge(sheet, 0, 2, 'boardID')
-    #log.add_sheet_row(sheet, ['normal', 'high', 'dynamic'])
-    #log.add_sheet_col(sheet, ['15', '16', '17', '18', '19', '17', '15'], 0, 5)
-    
-
     log.process()
-    log.save_workbooks()
